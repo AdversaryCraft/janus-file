@@ -85,7 +85,7 @@ python bank_stmt_polyglot.py -p payload.exe -o statement.pdf --theme "#1b5e20"
 
 # Custom bank name (spaces allowed, use double quotes)
 python bank_stmt_polyglot.py -p payload.exe -o statement.pdf \
-    --bank "First National Bank" --theme purple
+    --bank "Dummy Bank" --theme purple
 ```
 
 ### Themes
