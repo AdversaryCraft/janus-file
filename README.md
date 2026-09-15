@@ -161,16 +161,8 @@ The launcher does not write outside of `%TEMP%`.
 janus-file/
 ├── README.md
 ├── LICENSE
-├── bank_stmt_polyglot.py
-├── detections/
-│   ├── pdf_zip_polyglot.yar
-│   └── certutil_decode.yml
-└── examples/
-    └── hello.exe
+└── bank_stmt_polyglot.py
 ```
-
-The `detections/` folder holds the YARA rule and a Sigma-style YAML stub
-for the launcher stage. Copy them into your detection pipeline as needed.
 
 ---
 
