@@ -157,15 +157,100 @@ The launcher does not write outside of `%TEMP%`.
 
 ## Detection guidance
 
-If you are on the defensive side, the artifacts worth monitoring are:
+The technique leaves a specific set of artifacts at the file, endpoint,
+and gateway layers. Below is a starting set for defenders.
 
-- PDF files that contain a ZIP end-of-central-directory record
-- ZIP archives whose local header offsets do not match their actual position
-- Base64 blobs written to `%TEMP%` followed by `certutil -decode`
-- `cmd.exe` spawning from an archive extraction tool
-- A PDF and an EXE appearing in the same folder within a short window
+### File-level detection
 
-The companion article includes the full detection writeup.
+A PDF+ZIP polyglot can be identified by scanning the full byte stream of
+a PDF attachment, not just the header.
+
+**YARA rule:**
+
+```yara
+rule PDF_ZIP_Polyglot
+{
+    meta:
+        description = "Detects a file that is both a PDF and a ZIP"
+        author      = "Vali Rassouli Chokharpan"
+        reference   = "https://example.com/janus-file"
+
+    strings:
+        $pdf_header = { 25 50 44 46 2D }          // %PDF-
+        $zip_eocd   = { 50 4B 05 06 }              // PK\x05\x06
+        $zip_local  = { 50 4B 03 04 }              // PK\x03\x04
+
+    condition:
+        $pdf_header at 0 and
+        $zip_eocd in (filesize - 65557 .. filesize) and
+        $zip_local in (filesize - 65557 .. filesize)
+}
+```
+
+Key points:
+
+- `%PDF-` must be at offset 0.
+- The ZIP EOCD record must be in the trailing window (last 64 KB, per the ZIP spec).
+- The presence of a local file header (`PK\x03\x04`) inside the same window confirms real ZIP content, not just a stray signature.
+
+### Endpoint detection
+
+The launcher stage produces a distinct process chain and file pattern.
+
+| Artifact | What to monitor |
+| :--- | :--- |
+| Base64 staging file | A `.b64` file written to `%TEMP%` under a randomized name |
+| `certutil -decode` | `certutil.exe` invoked with `-decode` and a `%TEMP%` source and destination |
+| Launcher execution | `cmd.exe` started from an archive extraction directory (e.g., `7zG.exe`, `WinRAR.exe`, `explorer.exe`) |
+| Payload drop | An `.exe` written to the same folder as the batch file, followed by `start "" /b` |
+| PDF and EXE in the same folder | A `.pdf` and an `.exe` appearing in the same directory within a short window |
+
+**Sysmon queries (example):**
+
+```
+Event ID 1: Process Create
+  Image ends with certutil.exe
+  CommandLine contains "-decode"
+
+Event ID 11: File Create
+  TargetFilename contains "\AppData\Local\Temp\"
+  TargetFilename ends with ".b64"
+```
+
+**CrowdStrike LogScale (example):**
+
+```
+#event_simpleName=ProcessRollup2
+| Image = /\\certutil\.exe$/i
+| CommandLine = /-decode/i
+| table([ComputerName, UserName, ParentBaseFileName, CommandLine])
+```
+
+### Gateway detection
+
+For email security teams, the checks that matter are:
+
+1. **Full-body scanning of PDF attachments.** Do not stop at the PDF structure. Scan the entire attachment for a trailing ZIP EOCD record.
+2. **Nested archive detection.** If the file contains both a PDF header and a ZIP EOCD, flag it as a polyglot regardless of the declared MIME type.
+3. **Extension mismatch.** A file whose declared type is `application/pdf` but whose body contains ZIP local headers is suspicious. This is the same class of detection used for Office macros and OLE objects.
+4. **Archive-to-EXE chain.** If an email leads to an attachment that produces an `.exe` after extraction, escalate even if the initial file was allowed.
+
+### Detection gaps to be aware of
+
+The technique is designed to slip past scanners that only inspect the
+header. Common misses:
+
+- PDF parsers that follow the cross-reference table and stop at `%%EOF` — they never see the appended ZIP.
+- File-type fingerprinting based on the first four bytes only.
+- Signature engines that look for known-bad hashes — the polyglot has a unique hash per build because the PDF content is randomized.
+
+If your scanner shows "PDF" as the file type and does not inspect trailing bytes, this technique will pass through.
+
+### Detection tuning notes
+
+- Legitimate PDFs can contain `PK\x03\x04` bytes by coincidence, especially inside compressed streams. Require the ZIP EOCD record to be near the end of the file (last 64 KB) for a high-confidence match.
+- Some email signatures and PDF/A conformance markers also produce trailing bytes. The YARA rule above reduces false positives by requiring `%PDF-` at offset 0.
+- Whitelist any internal tooling that intentionally produces PDFs with appended data (rare but it exists).
 
 ---
 
@@ -176,12 +261,15 @@ janus-file/
 ├── README.md
 ├── LICENSE
 ├── bank_stmt_polyglot.py
+├── detections/
+│   ├── pdf_zip_polyglot.yar
+│   └── certutil_decode.yml
 └── examples/
     └── hello.exe
 ```
 
-The `examples/` folder holds a benign `hello.exe` you can use to test the
-flow without embedding anything meaningful.
+The `detections/` folder holds the YARA rule and a Sigma-style YAML stub
+for the launcher stage. Copy them into your detection pipeline as needed.
 
 ---
 
