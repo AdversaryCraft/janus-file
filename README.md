@@ -172,8 +172,7 @@ rule PDF_ZIP_Polyglot
 {
     meta:
         description = "Detects a file that is both a PDF and a ZIP"
-        author      = "Vali Rassouli Chokharpan"
-        reference   = "https://example.com/janus-file"
+        author      = "Adversary Craft"
 
     strings:
         $pdf_header = { 25 50 44 46 2D }          // %PDF-
