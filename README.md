@@ -7,6 +7,8 @@ One file, two formats. Gmail sees a PDF and applies PDF scanning logic.
 7-Zip, WinRAR, and every other standard archive tool see a ZIP and extract
 its contents. Both readings are correct.
 
+This is the code used for my [**blog post**](https://adversarycraft.com/2026/09/15/why-gmail-blocks-your-exe-and-how-i-sent-one-anyway/).
+
 > **Authorized testing only.** Only run this against systems you own or
 > have explicit written permission to test. Do not use it to send
 > unsolicited attachments to anyone.
